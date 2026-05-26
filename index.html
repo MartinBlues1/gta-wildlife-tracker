@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GTA V Wildlife Tracker Online</title>
+<style>
+:root{
+  --bg:#f1f5f9;--panel:#fff;--text:#0f172a;--muted:#64748b;--border:#cbd5e1;
+  --input:#fff;--shadow:rgba(0,0,0,.08);--mapbg:#ddd;--table:#e2e8f0;
+}
+body.dark{
+  --bg:#020617;--panel:#0f172a;--text:#e5e7eb;--muted:#94a3b8;--border:#334155;
+  --input:#111827;--shadow:rgba(0,0,0,.4);--mapbg:#1e293b;--table:#334155;
+}
+body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text)}
+header{padding:16px;background:var(--panel);border-bottom:1px solid var(--border)}
+h1{margin:0 0 4px} h2{margin:16px 0 8px;font-size:18px}
+.wrap{display:grid;grid-template-columns:350px 1fr;gap:16px;padding:16px}
+aside,section,.mappanel{background:var(--panel);border-radius:16px;padding:16px;box-shadow:0 1px 4px var(--shadow)}
+label{display:block;font-size:12px;font-weight:bold;margin-top:12px;color:var(--muted)}
+select,input,button{width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:10px;padding:9px;margin-top:4px;font-size:14px;background:var(--input);color:var(--text)}
+button{cursor:pointer;font-weight:bold}button:hover{filter:brightness(.97)}
+body.dark button:hover{filter:brightness(1.15)}
+.ok{background:#dcfce7;color:#052e16}.warn{background:#fef3c7;color:#713f12}.danger{background:#fee2e2;color:#7f1d1d}
+body.dark .ok{background:#14532d;color:#dcfce7}body.dark .warn{background:#713f12;color:#fef3c7}body.dark .danger{background:#7f1d1d;color:#fee2e2}
+.row{display:flex;gap:8px}.row>*{flex:1}
+.maptoolbar{display:flex;gap:8px;align-items:center;margin-bottom:10px}.maptoolbar button{width:auto;min-width:44px;margin:0}.hint{color:var(--muted);font-size:12px;margin-left:auto}
+.mapbox{position:relative;background:var(--mapbg);overflow:hidden;border-radius:16px;max-width:min(100%,980px);aspect-ratio:1/1;margin:0 auto;cursor:crosshair;touch-action:none}.mapbox.dragging{cursor:grabbing}
+#viewport{position:absolute;inset:0;transform-origin:0 0;will-change:transform}
+#map{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;user-select:none;pointer-events:none}
+#heat{position:absolute;inset:0;pointer-events:none;mix-blend-mode:multiply}
+#markers{position:absolute;inset:0;pointer-events:none;z-index:5}
+.marker{
+position:absolute;
+transform:translate(-50%,-100%);
+transform-origin:50% 100%;
+background:transparent;
+border:0;
+padding:0;
+margin:0;
+width:24px;
+height:32px;
+line-height:0;
+filter:drop-shadow(0 2px 3px rgba(0,0,0,.55));
+pointer-events:auto;
+}
+.marker svg{
+display:block;
+width:24px;
+height:32px;
+}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{border-bottom:1px solid var(--table);padding:7px;text-align:left}
+.small{font-size:12px;color:var(--muted)}.stats{margin-top:14px;padding:10px;border-radius:12px;background:rgba(148,163,184,.14);font-size:14px}.timelinebox{margin-top:14px;padding:10px;border-radius:12px;background:rgba(59,130,246,.12);font-size:14px}
+#status{padding:8px 10px;border-radius:10px;margin-top:10px;font-size:13px}
+.topline{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.themebtn{width:auto;margin:0;padding:8px 12px}
+@media(max-width:900px){.wrap{grid-template-columns:1fr}.maptoolbar{flex-wrap:wrap}.hint{width:100%;margin-left:0}}
+</style>
+</head>
+<body>
+<header>
+<div class="topline">
+  <div>
+    <h1>GTA V Wildlife Tracker Online</h1>
+    <div class="small">Zentrale Wildlife-Datenbank mit Nutzername, Heatmap, Timeline, Dark Mode und Live-Updates und scharfe Overlay-SVG-Marker mit korrekter Zoom-Projektion.</div>
+  </div>
+  <button class="themebtn" onclick="toggleTheme()" id="themeButton">🌙 Dark Mode</button>
+</div>
+<div id="status" class="warn">Verbinde mit Datenbank …</div>
+</header>
+
+<div class="wrap">
+<aside>
+<h2>Neue Sichtung</h2>
+
+<label>Dein Name / Funkrufname</label>
+<input id="username" placeholder="z. B. Warden Miller" oninput="saveUsername()">
+<div class="small">Wird lokal in deinem Browser gemerkt und bei neuen Sichtungen gespeichert.</div>
+
+<label>Tier</label>
+<select id="animal">
+<option>Deer</option><option>Rabbit</option><option>Boar</option><option>Coyote</option><option>Mountain Lion</option><option>Skunk</option><option>Bobcat</option><option>Bear</option><option>Wolf</option><option>Lion</option><option>Leopard</option><option>Red Panda</option><option>Cow</option><option>Donkey</option>
+</select>
+
+<label>Neues Tier ergänzen</label>
+<div class="row"><input id="newAnimal" placeholder="z. B. Horse"><button onclick="addAnimal()" style="max-width:70px;">+</button></div>
+
+<label>Tageszeit automatisch aus aktueller Uhrzeit</label>
+<select id="time" disabled><option>Morning</option><option>Day</option><option>Evening</option><option>Night</option></select>
+<div class="small">0–6 Night, 6–12 Morning, 12–18 Day, 18–24 Evening</div>
+
+<label>Wetter</label>
+<select id="weather"><option>Clear</option><option>Cloudy</option><option>Rain</option><option>Fog</option><option>Storm</option><option>Unknown</option></select>
+
+<label>Notiz</label>
+<input id="note" placeholder="z. B. pack, behavior, route">
+
+<button class="ok" onclick="loadPoints()">Daten neu laden</button>
+
+<h2>Ansicht</h2>
+<label>Modus</label>
+<select id="mode" onchange="render()"><option value="markers">Marker</option><option value="heat">Heatmap</option><option value="both">Marker + Heatmap</option></select>
+
+<label>Tierfilter</label>
+<select id="filterAnimal" onchange="render()">
+<option value="alle">Alle Tiere</option><option>Deer</option><option>Rabbit</option><option>Boar</option><option>Coyote</option><option>Mountain Lion</option><option>Skunk</option><option>Bobcat</option><option>Bear</option><option>Wolf</option><option>Lion</option><option>Leopard</option><option>Red Panda</option><option>Cow</option><option>Donkey</option>
+</select>
+
+<label>Tageszeitfilter</label>
+<select id="filterTime" onchange="render()"><option value="alle">Alle Tageszeiten</option><option>Morning</option><option>Day</option><option>Evening</option><option>Night</option></select>
+
+<div class="timelinebox">
+<label style="margin-top:0;">Timeline-Modus</label>
+<select id="timelineMode" onchange="render()"><option value="all">Alle Daten anzeigen</option><option value="until">Bis zum gewählten Datum anzeigen</option><option value="exact">Nur gewähltes Datum anzeigen</option></select>
+<label>Timeline-Datum: <span id="timelineLabel">alle</span></label>
+<input id="timelineSlider" type="range" min="0" max="0" value="0" oninput="render()">
+<button onclick="resetTimeline()">Timeline zurücksetzen</button>
+</div>
+
+<label>Heatmap-Radius: <span id="radiusVal">70</span></label>
+<input id="radius" type="range" min="20" max="180" value="70" oninput="radiusVal.textContent=this.value;render()">
+
+<label>Intensität: <span id="intensityVal">0.45</span></label>
+<input id="intensity" type="range" min="0.1" max="1" step="0.05" value="0.45" oninput="intensityVal.textContent=this.value;render()">
+
+<h2>Zoom</h2>
+<label>Zoom: <span id="zoomVal">1.0</span>x</label>
+<input id="zoomSlider" type="range" min="1" max="8" step="0.1" value="1" oninput="setZoom(Number(this.value),true)">
+<button onclick="zoomIn()">Reinzoomen +</button><button onclick="zoomOut()">Rauszoomen −</button><button onclick="resetView()">Ansicht zurücksetzen</button>
+
+<div class="stats"><div><b id="count">0</b> Sichtungen in Datenbank</div><div><b id="visibleCount">0</b> aktuell sichtbar</div><div class="small" style="margin-top:8px;">Linksklick setzt eine Sichtung online. Neue, geänderte und gelöschte Sichtungen werden live synchronisiert.</div></div>
+<button onclick="exportCSV()">CSV Backup exportieren</button>
+</aside>
+
+<main class="mappanel">
+<div class="maptoolbar"><button onclick="setTool('add')" id="addTool">Punkte setzen</button><button onclick="setTool('pan')" id="panTool">Karte ziehen</button><button onclick="zoomOut()">−</button><button onclick="zoomIn()">+</button><button onclick="resetView()">Reset</button><span class="hint">Mausrad zoomt zur Cursorposition.</span></div>
+<div id="mapbox" class="mapbox" onmousedown="startPointer(event)" onmousemove="movePointer(event)" onmouseup="endPointer(event)" onmouseleave="endPointer(event)" onwheel="wheelZoom(event)" oncontextmenu="event.preventDefault()">
+<div id="viewport"><img id="map" src="map.jpg" alt="GTA V Karte"><div id="heat"></div></div><div id="markers"></div>
+</div>
+</main>
+</div>
+
+<section style="margin:0 16px 16px;"><h2>Sichtungsliste</h2><table><thead><tr><th>Tier</th><th>Erfasst am</th><th>Beobachter</th><th>Zeit</th><th>Wetter</th><th>X %</th><th>Y %</th><th>Notiz</th></tr></thead><tbody id="rows"></tbody></table></section>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL="https://vgydrzlgnpoezrmsbpor.supabase.co";
+const SUPABASE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZneWRyemxnbnBvZXpybXNicG9yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3ODczMTUsImV4cCI6MjA5NTM2MzMxNX0.0uqDCIicuanvg9rmEEFc2e07iuW3yST0hCTpvTGQhss";
+const TABLE="sightings";
+const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let realtimeStarted=false;
+let points=[];let zoom=1,panX=0,panY=0,tool="add",isDragging=false,dragStartX=0,dragStartY=0,panStartX=0,panStartY=0;
+
+function setStatus(text,cls){const s=document.getElementById("status");s.textContent=text;s.className=cls||"";}
+function pointDate(p){return p.created_at?String(p.created_at).slice(0,10):"unknown";}
+function autoTimeFromTimestamp(timestamp){const h=new Date(timestamp).getHours();if(h>=0&&h<6)return"Night";if(h>=6&&h<12)return"Morning";if(h>=12&&h<18)return"Day";return"Evening";}
+function updateCurrentTimePreview(){document.getElementById("time").value=autoTimeFromTimestamp(new Date().toISOString());}
+function uniqueDates(){return [...new Set(points.map(pointDate).filter(d=>d&&d!=="unknown"))].sort();}
+
+function loadTheme(){const t=localStorage.getItem("gtaTrackerTheme")||"light";document.body.classList.toggle("dark",t==="dark");document.getElementById("themeButton").textContent=t==="dark"?"☀️ Light Mode":"🌙 Dark Mode";}
+function toggleTheme(){const isDark=document.body.classList.toggle("dark");localStorage.setItem("gtaTrackerTheme",isDark?"dark":"light");loadTheme();}
+function loadUsername(){document.getElementById("username").value=localStorage.getItem("gtaTrackerUsername")||"";}
+function saveUsername(){localStorage.setItem("gtaTrackerUsername",document.getElementById("username").value.trim());}
+
+async function supabaseFetch(path,options={}){
+ const res=await fetch(`${SUPABASE_URL}/rest/v1/${path}`,{
+   ...options,
+   headers:{
+     "apikey":SUPABASE_KEY,
+     "Authorization":"Bearer "+SUPABASE_KEY,
+     "Content-Type":"application/json",
+     "Prefer":"return=representation",
+     ...(options.headers||{})
+   }
+ });
+ if(!res.ok){const msg=await res.text();throw new Error(msg||res.statusText);}
+ return res.status===204?null:await res.json();
+}
+
+async function loadPoints(){
+ try{
+   setStatus("Lade Sichtungen aus Supabase …","warn");
+   points=await supabaseFetch(`${TABLE}?select=*&order=created_at.desc`);
+   setStatus("Online verbunden. Sichtungen geladen: "+points.length,"ok");
+   render();
+   startRealtime();
+ }catch(err){
+   console.error(err);
+   setStatus("Fehler beim Laden: "+err.message,"danger");
+ }
+}
+
+async function savePoint(point){
+ try{
+   setStatus("Speichere Sichtung online …","warn");
+   const inserted=await supabaseFetch(TABLE,{method:"POST",body:JSON.stringify(point)});
+   if(inserted&&inserted[0]){
+     const exists=points.some(p=>String(p.id)===String(inserted[0].id));
+     if(!exists) points.unshift(inserted[0]);
+   } else {
+     await loadPoints();
+   }
+   setStatus("Sichtung gespeichert. Live-Update aktiv.","ok");
+   render();
+ }catch(err){
+   console.error(err);
+   setStatus("Fehler beim Speichern. Prüfe, ob die Spalte username existiert und Insert erlaubt ist: "+err.message,"danger");
+ }
+}
+
+function startRealtime(){
+ if(realtimeStarted)return;
+ realtimeStarted=true;
+ try{
+   supabaseClient
+     .channel("sightings-live-channel")
+     .on("postgres_changes",{event:"*",schema:"public",table:TABLE},payload=>{
+       const eventType=payload.eventType;
+
+       if(eventType==="INSERT"){
+         const row=payload.new;
+         if(!row)return;
+         const exists=points.some(p=>String(p.id)===String(row.id));
+         if(!exists){
+           points.unshift(row);
+           setStatus("Live-Update: neue Sichtung empfangen.","ok");
+           render();
+         }
+       }
+
+       if(eventType==="UPDATE"){
+         const row=payload.new;
+         if(!row)return;
+         const index=points.findIndex(p=>String(p.id)===String(row.id));
+         if(index>=0){
+           points[index]=row;
+         }else{
+           points.unshift(row);
+         }
+         setStatus("Live-Update: Sichtung aktualisiert.","ok");
+         render();
+       }
+
+       if(eventType==="DELETE"){
+         const oldRow=payload.old;
+         if(!oldRow)return;
+         points=points.filter(p=>String(p.id)!==String(oldRow.id));
+         setStatus("Live-Update: gelöschte Sichtung entfernt.","ok");
+         render();
+       }
+     })
+     .subscribe(status=>{
+       if(status==="SUBSCRIBED"){
+         setStatus("Online verbunden. Live-Updates aktiv. Sichtungen geladen: "+points.length,"ok");
+       }
+       if(status==="CHANNEL_ERROR"){
+         setStatus("Realtime-Verbindung fehlerhaft. Daten manuell neu laden.","warn");
+       }
+       if(status==="TIMED_OUT"){
+         setStatus("Realtime-Verbindung Timeout. Daten manuell neu laden.","warn");
+       }
+     });
+ }catch(err){
+   console.error(err);
+   setStatus("Live-Updates konnten nicht gestartet werden: "+err.message,"warn");
+ }
+}
+
+function updateTimelineControl(){const dates=uniqueDates();const slider=document.getElementById("timelineSlider");slider.max=Math.max(0,dates.length-1);if(Number(slider.value)>Number(slider.max))slider.value=slider.max;const mode=document.getElementById("timelineMode").value;document.getElementById("timelineLabel").textContent=(mode==="all"||!dates.length)?"alle":dates[Number(slider.value)];}
+function visiblePoints(){updateTimelineControl();const af=document.getElementById("filterAnimal").value,tf=document.getElementById("filterTime").value,tm=document.getElementById("timelineMode").value,dates=uniqueDates(),selected=dates[Number(document.getElementById("timelineSlider").value)];return points.filter(p=>{const d=pointDate(p);let dm=true;if(tm==="until"&&selected)dm=d<=selected;if(tm==="exact"&&selected)dm=d===selected;return(af==="alle"||p.animal===af)&&(tf==="alle"||p.time===tf)&&dm;});}
+function updateTransform(){
+  document.getElementById("viewport").style.transform=`translate(${panX}px,${panY}px) scale(${zoom})`;
+  document.getElementById("zoomVal").textContent=zoom.toFixed(1);
+  document.getElementById("zoomSlider").value=zoom;
+  updateMarkerPositions();
+}
+function setZoom(n,center){const old=zoom;zoom=Math.max(1,Math.min(8,n));if(center){const b=document.getElementById("mapbox").getBoundingClientRect(),cx=b.width/2,cy=b.height/2;panX=cx-((cx-panX)/old)*zoom;panY=cy-((cy-panY)/old)*zoom;}if(zoom===1){panX=0;panY=0;}updateTransform();}
+function zoomIn(){setZoom(zoom+.25,true);}function zoomOut(){setZoom(zoom-.25,true);}function resetView(){zoom=1;panX=0;panY=0;updateTransform();}
+function wheelZoom(e){e.preventDefault();const b=document.getElementById("mapbox").getBoundingClientRect(),mx=e.clientX-b.left,my=e.clientY-b.top,old=zoom;zoom=Math.max(1,Math.min(8,zoom+(e.deltaY>0?-.25:.25)));panX=mx-((mx-panX)/old)*zoom;panY=my-((my-panY)/old)*zoom;if(zoom===1){panX=0;panY=0;}updateTransform();}
+function setTool(t){tool=t;document.getElementById("addTool").style.background=tool==="add"?"#38bdf8":"white";document.getElementById("panTool").style.background=tool==="pan"?"#38bdf8":"white";}
+function screenToMapPercent(cx,cy){const b=document.getElementById("mapbox").getBoundingClientRect(),lx=cx-b.left,ly=cy-b.top;return{x:((lx-panX)/zoom/b.width)*100,y:((ly-panY)/zoom/b.height)*100};}
+
+
+function mapPercentToScreen(p){
+ const b=document.getElementById("mapbox").getBoundingClientRect();
+ return {
+   left: panX + (Number(p.x)/100) * b.width * zoom,
+   top: panY + (Number(p.y)/100) * b.height * zoom
+ };
+}
+
+function updateMarkerPositions(){
+ const markers=document.querySelectorAll("#markers .marker");
+ markers.forEach(btn=>{
+   const x=Number(btn.dataset.x);
+   const y=Number(btn.dataset.y);
+   if(!Number.isFinite(x)||!Number.isFinite(y))return;
+   const pos=mapPercentToScreen({x,y});
+   btn.style.left=pos.left+"px";
+   btn.style.top=pos.top+"px";
+ });
+}
+
+function startPointer(e){
+ if(e.target.classList.contains("marker"))return;
+ const shouldPan=tool==="pan"||e.button===2||e.shiftKey||e.ctrlKey;
+ if(shouldPan&&zoom>1){isDragging=true;dragStartX=e.clientX;dragStartY=e.clientY;panStartX=panX;panStartY=panY;document.getElementById("mapbox").classList.add("dragging");return;}
+ if(tool==="add"&&e.button===0){
+   const pos=screenToMapPercent(e.clientX,e.clientY);
+   if(pos.x<0||pos.x>100||pos.y<0||pos.y>100)return;
+   const createdAt=new Date().toISOString();
+   const username=document.getElementById("username").value.trim()||"Unknown";
+   saveUsername();
+   savePoint({animal:document.getElementById("animal").value,x:Number(pos.x.toFixed(3)),y:Number(pos.y.toFixed(3)),time:autoTimeFromTimestamp(createdAt),weather:document.getElementById("weather").value,note:document.getElementById("note").value||"",username});
+   document.getElementById("note").value="";
+ }
+}
+function movePointer(e){if(!isDragging)return;panX=panStartX+(e.clientX-dragStartX);panY=panStartY+(e.clientY-dragStartY);updateTransform();}
+function endPointer(){isDragging=false;document.getElementById("mapbox").classList.remove("dragging");}
+function resetTimeline(){document.getElementById("timelineMode").value="all";document.getElementById("timelineSlider").value=0;render();}
+function renderMarkers(vp,mode){
+ const markers=document.getElementById("markers");
+ markers.innerHTML="";
+ if(!(mode==="markers"||mode==="both"))return;
+
+ vp.forEach(p=>{
+   const btn=document.createElement("button");
+   btn.className="marker";
+   btn.dataset.x=p.x;
+   btn.dataset.y=p.y;
+   btn.innerHTML='<svg viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 1C6.5 1 2 5.5 2 11c0 7.5 10 19 10 19s10-11.5 10-19C22 5.5 17.5 1 12 1z" fill="#ef4444" stroke="#ffffff" stroke-width="2"/><circle cx="12" cy="11" r="4" fill="#ffffff"/></svg>';
+   const pos=mapPercentToScreen(p);
+   btn.style.left=pos.left+"px";
+   btn.style.top=pos.top+"px";
+   btn.title=`${p.animal} | ${pointDate(p)} | ${p.username||"Unknown"} | ${p.time} | ${p.weather} ${p.note||""}`;
+   markers.appendChild(btn);
+ });
+}
+
+function render(){
+ const mode=document.getElementById("mode").value;
+ const vp=visiblePoints();
+
+ renderMarkers(vp,mode);
+
+ const heat=document.getElementById("heat");
+ if(mode==="heat"||mode==="both"){
+   const r=Number(document.getElementById("radius").value);
+   const i=Number(document.getElementById("intensity").value);
+   heat.style.background=vp.map(p=>`radial-gradient(circle ${r}px at ${p.x}% ${p.y}%, rgba(255,0,0,${i}) 0%, rgba(255,165,0,${i*.7}) 35%, rgba(255,255,0,${i*.35}) 60%, rgba(255,0,0,0) 100%)`).join(",");
+ }else{
+   heat.style.background="transparent";
+ }
+
+ document.getElementById("count").textContent=points.length;
+ document.getElementById("visibleCount").textContent=vp.length;
+
+ const rows=document.getElementById("rows");
+ rows.innerHTML="";
+ points.forEach(p=>{
+   const tr=document.createElement("tr");
+   tr.innerHTML=`<td>${esc(p.animal)}</td><td>${esc(p.created_at||"")}</td><td>${esc(p.username||"Unknown")}</td><td>${esc(p.time||"")}</td><td>${esc(p.weather||"")}</td><td>${p.x}</td><td>${p.y}</td><td>${esc(p.note||"")}</td>`;
+   rows.appendChild(tr);
+ });
+}
+
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));}
+function addAnimal(){const val=document.getElementById("newAnimal").value.trim();if(!val)return;["animal","filterAnimal"].forEach(id=>{const sel=document.getElementById(id);if(![...sel.options].some(o=>o.value===val||o.text===val)){const opt=document.createElement("option");opt.textContent=val;opt.value=val;sel.appendChild(opt);}});document.getElementById("animal").value=val;document.getElementById("newAnimal").value="";}
+function exportCSV(){const header=["tier","x_prozent","y_prozent","tageszeit","wetter","notiz","beobachter","erfasst_am"],rows=points.map(p=>[p.animal,p.x,p.y,p.time,p.weather,p.note,p.username,p.created_at]),csv=[header,...rows].map(row=>row.map(cell=>`"${String(cell??"").replaceAll('"','""')}"`).join(";")).join("\n");const blob=new Blob([csv],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="gta-tier-sichtungen-online-backup.csv";a.click();URL.revokeObjectURL(url);}
+window.addEventListener("resize",updateMarkerPositions);
+loadTheme();loadUsername();updateCurrentTimePreview();setInterval(updateCurrentTimePreview,60000);setTool("add");updateTransform();loadPoints();
+</script>
+</body></html>
