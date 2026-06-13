@@ -130,6 +130,69 @@ color:var(--muted);
 margin-left:4px;
 }
 
+
+.mobileonly{display:none}
+.closebtn{margin-bottom:10px;background:rgba(148,163,184,.16)}
+.sidebarbackdrop{display:none}
+
+@media(max-width:900px){
+  body{overflow-x:hidden}
+  .mobileonly{display:inline-block}
+  header{position:sticky;top:0;z-index:50}
+  .topline{align-items:flex-start}
+  .themebtn{padding:10px 12px}
+  .wrap{display:block;padding:10px}
+  #sidebar{
+    position:fixed;
+    top:0;
+    left:0;
+    height:100dvh;
+    width:min(88vw,380px);
+    max-width:380px;
+    overflow-y:auto;
+    z-index:100;
+    transform:translateX(-110%);
+    transition:transform .22s ease;
+    border-radius:0 18px 18px 0;
+    padding-bottom:80px;
+  }
+  body.sidebar-open #sidebar{transform:translateX(0)}
+  .sidebarbackdrop{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.5);
+    z-index:90;
+  }
+  body.sidebar-open .sidebarbackdrop{display:block}
+  .mappanel{padding:8px;border-radius:14px}
+  .maptoolbar{
+    position:sticky;
+    top:88px;
+    z-index:30;
+    background:var(--panel);
+    padding:8px;
+    border-radius:14px;
+    box-shadow:0 3px 12px var(--shadow);
+  }
+  .maptoolbar button{min-height:42px;padding:10px 12px}
+  .mapbox{
+    max-width:100%;
+    height:calc(100dvh - 170px);
+    aspect-ratio:auto;
+    border-radius:14px;
+  }
+  select,input,button{min-height:42px;font-size:16px}
+  .popup{max-width:calc(100vw - 38px);min-width:240px}
+  section{margin:10px!important;padding:12px;overflow-x:auto}
+  table{min-width:850px}
+  .stats,.timelinebox{font-size:15px}
+}
+
+@media(min-width:901px){
+  #sidebar{display:block}
+}
+
 @media(max-width:900px){.wrap{grid-template-columns:1fr}.maptoolbar{flex-wrap:wrap}.hint{width:100%;margin-left:0}}
 </style>
 </head>
@@ -140,13 +203,16 @@ margin-left:4px;
     <h1>GTA V Wildlife Tracker Online</h1>
     <div class="small">Zentrale Wildlife-Datenbank mit Nutzername, Heatmap, Timeline, Dark Mode und Live-Updates und scharfe Overlay-SVG-Marker mit korrekter Zoom-Projektion.</div>
   </div>
+  <button class="themebtn mobileonly" onclick="toggleSidebar()" id="sidebarButton">☰ Menü</button>
   <button class="themebtn" onclick="toggleTheme()" id="themeButton">🌙 Dark Mode</button>
 </div>
 <div id="status" class="warn">Verbinde mit Datenbank …</div>
 </header>
+<div id="sidebarBackdrop" class="sidebarbackdrop" onclick="closeSidebar()"></div>
 
 <div class="wrap">
-<aside>
+<aside id="sidebar">
+<button class="mobileonly closebtn" onclick="closeSidebar()">✕ Menü schließen</button>
 <h2>Neue Sichtung</h2>
 
 <label>Dein Name / Funkrufname</label>
@@ -255,6 +321,17 @@ function pointDate(p){return p.created_at?String(p.created_at).slice(0,10):"unkn
 function autoTimeFromTimestamp(timestamp){const h=new Date(timestamp).getHours();if(h>=0&&h<6)return"Night";if(h>=6&&h<12)return"Morning";if(h>=12&&h<18)return"Day";return"Evening";}
 function updateCurrentTimePreview(){document.getElementById("time").value=autoTimeFromTimestamp(new Date().toISOString());}
 function uniqueDates(){return [...new Set(points.map(pointDate).filter(d=>d&&d!=="unknown"))].sort();}
+
+
+function openSidebar(){
+ document.body.classList.add("sidebar-open");
+}
+function closeSidebar(){
+ document.body.classList.remove("sidebar-open");
+}
+function toggleSidebar(){
+ document.body.classList.toggle("sidebar-open");
+}
 
 function loadTheme(){const t=localStorage.getItem("gtaTrackerTheme")||"light";document.body.classList.toggle("dark",t==="dark");document.getElementById("themeButton").textContent=t==="dark"?"☀️ Light Mode":"🌙 Dark Mode";}
 function toggleTheme(){const isDark=document.body.classList.toggle("dark");localStorage.setItem("gtaTrackerTheme",isDark?"dark":"light");loadTheme();}
