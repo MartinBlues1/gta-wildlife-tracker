@@ -277,7 +277,7 @@ margin-left:4px;
 </aside>
 
 <main class="mappanel">
-<div class="maptoolbar"><button onclick="setTool('add')" id="addTool">Punkte setzen</button><button onclick="setTool('pan')" id="panTool">Karte ziehen</button><button onclick="zoomOut()">−</button><button onclick="zoomIn()">+</button><button onclick="resetView()">Reset</button><span class="hint">Desktop: Mausrad zoomt. Mobil: zwei Finger zoomen, im Ziehen-Modus mit Finger verschieben.</span></div>
+<div class="maptoolbar"><button onclick="setTool('add')" id="addTool">Punkte setzen</button><button onclick="setTool('pan')" id="panTool">Karte ziehen</button><button onclick="zoomOut()">−</button><button onclick="zoomIn()">+</button><button onclick="resetView()">Reset</button><span class="hint">Desktop: Mausrad zoomt. Mobil: Im Punkte-Modus tippen zum Erfassen; im Ziehen-Modus mit einem Finger verschieben; zwei Finger zoomen.</span></div>
 <div id="mapbox" class="mapbox" onmousedown="startPointer(event)" onmousemove="movePointer(event)" onmouseup="endPointer(event)" onmouseleave="endPointer(event)" onwheel="wheelZoom(event)" ontouchstart="startTouch(event)" ontouchmove="moveTouch(event)" ontouchend="endTouch(event)" ontouchcancel="endTouch(event)" oncontextmenu="event.preventDefault()">
 <div id="viewport"><img id="map" src="map.jpg" alt="GTA V Karte"><div id="heat"></div></div><div id="markers"></div><div id="popupLayer"></div>
 </div>
@@ -575,7 +575,7 @@ function startTouch(e){
    touchTapStart={x:t.clientX,y:t.clientY};
    touchMoved=false;
 
-   if(tool==="pan" || zoom>1){
+   if(tool==="pan"){
      e.preventDefault();
      closePopup();
      touchMode="pan";
