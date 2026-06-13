@@ -277,8 +277,8 @@ margin-left:4px;
 </aside>
 
 <main class="mappanel">
-<div class="maptoolbar"><button onclick="setTool('add')" id="addTool">Punkte setzen</button><button onclick="setTool('pan')" id="panTool">Karte ziehen</button><button onclick="zoomOut()">−</button><button onclick="zoomIn()">+</button><button onclick="resetView()">Reset</button><span class="hint">Mausrad zoomt zur Cursorposition.</span></div>
-<div id="mapbox" class="mapbox" onmousedown="startPointer(event)" onmousemove="movePointer(event)" onmouseup="endPointer(event)" onmouseleave="endPointer(event)" onwheel="wheelZoom(event)" oncontextmenu="event.preventDefault()">
+<div class="maptoolbar"><button onclick="setTool('add')" id="addTool">Punkte setzen</button><button onclick="setTool('pan')" id="panTool">Karte ziehen</button><button onclick="zoomOut()">−</button><button onclick="zoomIn()">+</button><button onclick="resetView()">Reset</button><span class="hint">Desktop: Mausrad zoomt. Mobil: zwei Finger zoomen, im Ziehen-Modus mit Finger verschieben.</span></div>
+<div id="mapbox" class="mapbox" onmousedown="startPointer(event)" onmousemove="movePointer(event)" onmouseup="endPointer(event)" onmouseleave="endPointer(event)" onwheel="wheelZoom(event)" ontouchstart="startTouch(event)" ontouchmove="moveTouch(event)" ontouchend="endTouch(event)" ontouchcancel="endTouch(event)" oncontextmenu="event.preventDefault()">
 <div id="viewport"><img id="map" src="map.jpg" alt="GTA V Karte"><div id="heat"></div></div><div id="markers"></div><div id="popupLayer"></div>
 </div>
 </main>
@@ -315,7 +315,7 @@ const SUPABASE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSI
 const TABLE="sightings";
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 let realtimeStarted=false;
-let points=[];let zoom=1,panX=0,panY=0,tool="add",isDragging=false,dragStartX=0,dragStartY=0,panStartX=0,panStartY=0;let sortKey="created_at";let sortDirection="desc";let sightingsListCollapsed=false;let lastOwnSightingId=localStorage.getItem("gtaTrackerLastOwnSightingId")||null;
+let points=[];let zoom=1,panX=0,panY=0,tool="add",isDragging=false,dragStartX=0,dragStartY=0,panStartX=0,panStartY=0;let sortKey="created_at";let sortDirection="desc";let sightingsListCollapsed=false;let lastOwnSightingId=localStorage.getItem("gtaTrackerLastOwnSightingId")||null;let touchMode=null;let touchStartDistance=0;let touchStartZoom=1;let touchStartCenter={x:0,y:0};let touchStartPan={x:0,y:0};let touchTapStart={x:0,y:0};let touchMoved=false;
 
 function setStatus(text,cls){const s=document.getElementById("status");s.textContent=text;s.className=cls||"";}
 function pointDate(p){return p.created_at?String(p.created_at).slice(0,10):"unknown";}
@@ -527,6 +527,119 @@ function updateMarkerPositions(){
    btn.style.left=pos.left+"px";
    btn.style.top=pos.top+"px";
  });
+}
+
+
+function touchDistance(a,b){
+ const dx=b.clientX-a.clientX;
+ const dy=b.clientY-a.clientY;
+ return Math.sqrt(dx*dx+dy*dy);
+}
+
+function touchCenter(a,b){
+ return {
+   x:(a.clientX+b.clientX)/2,
+   y:(a.clientY+b.clientY)/2
+ };
+}
+
+function zoomAtClientPoint(newZoom,clientX,clientY){
+ const b=document.getElementById("mapbox").getBoundingClientRect();
+ const mx=clientX-b.left;
+ const my=clientY-b.top;
+ const oldZoom=zoom;
+ zoom=Math.max(1,Math.min(8,newZoom));
+ panX=mx-((mx-panX)/oldZoom)*zoom;
+ panY=my-((my-panY)/oldZoom)*zoom;
+ if(zoom===1){panX=0;panY=0;}
+ updateTransform();
+}
+
+function startTouch(e){
+ if(e.target.closest && (e.target.closest(".popup") || e.target.closest(".marker"))) return;
+
+ if(e.touches.length===2){
+   e.preventDefault();
+   closePopup();
+   touchMode="pinch";
+   touchStartDistance=touchDistance(e.touches[0],e.touches[1]);
+   touchStartZoom=zoom;
+   touchStartCenter=touchCenter(e.touches[0],e.touches[1]);
+   touchStartPan={x:panX,y:panY};
+   touchMoved=true;
+   return;
+ }
+
+ if(e.touches.length===1){
+   const t=e.touches[0];
+   touchTapStart={x:t.clientX,y:t.clientY};
+   touchMoved=false;
+
+   if(tool==="pan" || zoom>1){
+     e.preventDefault();
+     closePopup();
+     touchMode="pan";
+     dragStartX=t.clientX;
+     dragStartY=t.clientY;
+     panStartX=panX;
+     panStartY=panY;
+     document.getElementById("mapbox").classList.add("dragging");
+   }else{
+     touchMode="tap";
+   }
+ }
+}
+
+function moveTouch(e){
+ if(touchMode==="pinch" && e.touches.length===2){
+   e.preventDefault();
+   const center=touchCenter(e.touches[0],e.touches[1]);
+   const dist=touchDistance(e.touches[0],e.touches[1]);
+   const factor=dist/touchStartDistance;
+   zoomAtClientPoint(touchStartZoom*factor,center.x,center.y);
+   return;
+ }
+
+ if(touchMode==="pan" && e.touches.length===1){
+   e.preventDefault();
+   const t=e.touches[0];
+   const dx=t.clientX-dragStartX;
+   const dy=t.clientY-dragStartY;
+   if(Math.abs(dx)+Math.abs(dy)>8) touchMoved=true;
+   panX=panStartX+dx;
+   panY=panStartY+dy;
+   updateTransform();
+ }
+}
+
+function endTouch(e){
+ if(touchMode==="tap" && e.changedTouches.length===1){
+   const t=e.changedTouches[0];
+   const dx=Math.abs(t.clientX-touchTapStart.x);
+   const dy=Math.abs(t.clientY-touchTapStart.y);
+   if(dx+dy<12 && tool==="add"){
+     const pos=screenToMapPercent(t.clientX,t.clientY);
+     if(pos.x>=0&&pos.x<=100&&pos.y>=0&&pos.y<=100){
+       const createdAt=new Date().toISOString();
+       const username=document.getElementById("username").value.trim()||"Unknown";
+       saveUsername();
+       savePoint({
+         animal:document.getElementById("animal").value,
+         x:Number(pos.x.toFixed(3)),
+         y:Number(pos.y.toFixed(3)),
+         time:autoTimeFromTimestamp(createdAt),
+         weather:document.getElementById("weather").value,
+         note:document.getElementById("note").value||"",
+         username
+       });
+       document.getElementById("note").value="";
+     }
+   }
+ }
+
+ touchMode=null;
+ isDragging=false;
+ document.getElementById("mapbox").classList.remove("dragging");
 }
 
 function startPointer(e){
