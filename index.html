@@ -27,7 +27,7 @@ body.dark .ok{background:#14532d;color:#dcfce7}body.dark .warn{background:#713f1
 .row{display:flex;gap:8px}.row>*{flex:1}
 .maptoolbar{display:flex;gap:8px;align-items:center;margin-bottom:10px}.maptoolbar button{width:auto;min-width:44px;margin:0}.hint{color:var(--muted);font-size:12px;margin-left:auto}
 .mapbox{position:relative;background:var(--mapbg);overflow:hidden;border-radius:16px;max-width:min(100%,980px);aspect-ratio:1/1;margin:0 auto;cursor:crosshair;touch-action:none}.mapbox.dragging{cursor:grabbing}
-#viewport{position:absolute;inset:0;transform-origin:0 0;will-change:transform}
+#viewport{position:absolute;transform-origin:0 0;will-change:transform}
 #map{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;user-select:none;pointer-events:none}
 #heat{position:absolute;inset:0;pointer-events:none;mix-blend-mode:multiply}
 #markers{position:absolute;inset:0;pointer-events:none;z-index:5}
@@ -277,7 +277,7 @@ margin-left:4px;
 
 <main class="mappanel">
 <div class="maptoolbar"><button onclick="setTool('add')" id="addTool">Punkte setzen</button><button onclick="setTool('pan')" id="panTool">Karte ziehen</button><button onclick="zoomOut()">−</button><button onclick="zoomIn()">+</button><button onclick="resetView()">Reset</button><span class="hint">Mausrad zoomt zur Cursorposition.</span></div>
-<div id="mapbox" class="mapbox" onmousedown="startPointer(event)" onmousemove="movePointer(event)" onmouseup="endPointer(event)" onmouseleave="endPointer(event)" onwheel="wheelZoom(event)" oncontextmenu="event.preventDefault()">
+<div id="mapbox" class="mapbox" onmousedown="startPointer(event)" onmousemove="movePointer(event)" onmouseup="endPointer(event)" onmouseleave="endPointer(event)" onwheel="wheelZoom(event)" ontouchstart="startTouch(event)" ontouchmove="moveTouch(event)" ontouchend="endTouch(event)" ontouchcancel="endTouch(event)" oncontextmenu="event.preventDefault()">
 <div id="viewport"><img id="map" src="map.jpg" alt="GTA V Karte"><div id="heat"></div></div><div id="markers"></div><div id="popupLayer"></div>
 </div>
 </main>
@@ -314,7 +314,7 @@ const SUPABASE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSI
 const TABLE="sightings";
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 let realtimeStarted=false;
-let points=[];let zoom=1,panX=0,panY=0,tool="add",isDragging=false,dragStartX=0,dragStartY=0,panStartX=0,panStartY=0;let sortKey="created_at";let sortDirection="desc";let sightingsListCollapsed=false;let lastOwnSightingId=localStorage.getItem("gtaTrackerLastOwnSightingId")||null;
+let points=[];let zoom=1,panX=0,panY=0,tool="add",isDragging=false,dragStartX=0,dragStartY=0,panStartX=0,panStartY=0;let sortKey="created_at";let sortDirection="desc";let sightingsListCollapsed=false;let lastOwnSightingId=localStorage.getItem("gtaTrackerLastOwnSightingId")||null;let mapGeom={left:0,top:0,size:0};let touchMode=null;let touchStartDistance=0;let touchStartZoom=1;let touchCenterStart={x:0,y:0};let touchPanStart={x:0,y:0};let touchStartPoint={x:0,y:0};
 
 function setStatus(text,cls){const s=document.getElementById("status");s.textContent=text;s.className=cls||"";}
 function pointDate(p){return p.created_at?String(p.created_at).slice(0,10):"unknown";}
@@ -495,24 +495,62 @@ function startRealtime(){
 
 function updateTimelineControl(){const dates=uniqueDates();const slider=document.getElementById("timelineSlider");slider.max=Math.max(0,dates.length-1);if(Number(slider.value)>Number(slider.max))slider.value=slider.max;const mode=document.getElementById("timelineMode").value;document.getElementById("timelineLabel").textContent=(mode==="all"||!dates.length)?"alle":dates[Number(slider.value)];}
 function visiblePoints(){updateTimelineControl();const af=document.getElementById("filterAnimal").value,tf=document.getElementById("filterTime").value,tm=document.getElementById("timelineMode").value,dates=uniqueDates(),selected=dates[Number(document.getElementById("timelineSlider").value)];return points.filter(p=>{const d=pointDate(p);let dm=true;if(tm==="until"&&selected)dm=d<=selected;if(tm==="exact"&&selected)dm=d===selected;return(af==="alle"||p.animal===af)&&(tf==="alle"||p.time===tf)&&dm;});}
+function updateMapGeometry(){
+ const box=document.getElementById("mapbox");
+ const viewport=document.getElementById("viewport");
+ const b=box.getBoundingClientRect();
+ const size=Math.min(b.width,b.height);
+ mapGeom={
+   left:(b.width-size)/2,
+   top:(b.height-size)/2,
+   size:size
+ };
+ viewport.style.left=mapGeom.left+"px";
+ viewport.style.top=mapGeom.top+"px";
+ viewport.style.width=mapGeom.size+"px";
+ viewport.style.height=mapGeom.size+"px";
+}
+
 function updateTransform(){
-  document.getElementById("viewport").style.transform=`translate(${panX}px,${panY}px) scale(${zoom})`;
-  document.getElementById("zoomVal").textContent=zoom.toFixed(1);
-  document.getElementById("zoomSlider").value=zoom;
-  updateMarkerPositions();
+ updateMapGeometry();
+ document.getElementById("viewport").style.transform=`translate(${panX}px,${panY}px) scale(${zoom})`;
+ document.getElementById("zoomVal").textContent=zoom.toFixed(1);
+ document.getElementById("zoomSlider").value=zoom;
+ updateMarkerPositions();
 }
 function setZoom(n,center){const old=zoom;zoom=Math.max(1,Math.min(8,n));if(center){const b=document.getElementById("mapbox").getBoundingClientRect(),cx=b.width/2,cy=b.height/2;panX=cx-((cx-panX)/old)*zoom;panY=cy-((cy-panY)/old)*zoom;}if(zoom===1){panX=0;panY=0;}updateTransform();}
 function zoomIn(){setZoom(zoom+.25,true);}function zoomOut(){setZoom(zoom-.25,true);}function resetView(){zoom=1;panX=0;panY=0;updateTransform();}
-function wheelZoom(e){e.preventDefault();const b=document.getElementById("mapbox").getBoundingClientRect(),mx=e.clientX-b.left,my=e.clientY-b.top,old=zoom;zoom=Math.max(1,Math.min(8,zoom+(e.deltaY>0?-.25:.25)));panX=mx-((mx-panX)/old)*zoom;panY=my-((my-panY)/old)*zoom;if(zoom===1){panX=0;panY=0;}updateTransform();}
+function wheelZoom(e){
+ e.preventDefault();
+ updateMapGeometry();
+ const b=document.getElementById("mapbox").getBoundingClientRect();
+ const mx=e.clientX-b.left;
+ const my=e.clientY-b.top;
+ const old=zoom;
+ zoom=Math.max(1,Math.min(8,zoom+(e.deltaY>0?-.25:.25)));
+ panX=mx-mapGeom.left-((mx-mapGeom.left-panX)/old)*zoom;
+ panY=my-mapGeom.top-((my-mapGeom.top-panY)/old)*zoom;
+ if(zoom===1){panX=0;panY=0;}
+ updateTransform();
+}updateTransform();}
 function setTool(t){tool=t;document.getElementById("addTool").style.background=tool==="add"?"#38bdf8":"white";document.getElementById("panTool").style.background=tool==="pan"?"#38bdf8":"white";}
-function screenToMapPercent(cx,cy){const b=document.getElementById("mapbox").getBoundingClientRect(),lx=cx-b.left,ly=cy-b.top;return{x:((lx-panX)/zoom/b.width)*100,y:((ly-panY)/zoom/b.height)*100};}
+function screenToMapPercent(cx,cy){
+ updateMapGeometry();
+ const b=document.getElementById("mapbox").getBoundingClientRect();
+ const localX=cx-b.left;
+ const localY=cy-b.top;
+ return {
+   x:((localX-mapGeom.left-panX)/zoom/mapGeom.size)*100,
+   y:((localY-mapGeom.top-panY)/zoom/mapGeom.size)*100
+ };
+}
 
 
 function mapPercentToScreen(p){
- const b=document.getElementById("mapbox").getBoundingClientRect();
+ updateMapGeometry();
  return {
-   left: panX + (Number(p.x)/100) * b.width * zoom,
-   top: panY + (Number(p.y)/100) * b.height * zoom
+   left: mapGeom.left + panX + (Number(p.x)/100) * mapGeom.size * zoom,
+   top: mapGeom.top + panY + (Number(p.y)/100) * mapGeom.size * zoom
  };
 }
 
@@ -526,6 +564,106 @@ function updateMarkerPositions(){
    btn.style.left=pos.left+"px";
    btn.style.top=pos.top+"px";
  });
+}
+
+
+function getTouchDistance(t1,t2){
+ const dx=t2.clientX-t1.clientX;
+ const dy=t2.clientY-t1.clientY;
+ return Math.sqrt(dx*dx+dy*dy);
+}
+
+function getTouchCenter(t1,t2){
+ return {
+   x:(t1.clientX+t2.clientX)/2,
+   y:(t1.clientY+t2.clientY)/2
+ };
+}
+
+function zoomAtScreenPoint(newZoom,clientX,clientY){
+ const b=document.getElementById("mapbox").getBoundingClientRect();
+ const mouseX=clientX-b.left;
+ const mouseY=clientY-b.top;
+ const oldZoom=zoom;
+ zoom=Math.max(1,Math.min(8,newZoom));
+ panX=mouseX-mapGeom.left-((mouseX-mapGeom.left-panX)/oldZoom)*zoom;
+ panY=mouseY-mapGeom.top-((mouseY-mapGeom.top-panY)/oldZoom)*zoom;
+ if(zoom===1){panX=0;panY=0;}
+ updateTransform();
+}
+
+function startTouch(e){
+ if(e.target.closest && (e.target.closest(".popup") || e.target.closest(".marker"))) return;
+ updateMapGeometry();
+
+ if(e.touches.length===2){
+   e.preventDefault();
+   closePopup();
+   touchMode="pinch";
+   touchStartDistance=getTouchDistance(e.touches[0],e.touches[1]);
+   touchStartZoom=zoom;
+   touchCenterStart=getTouchCenter(e.touches[0],e.touches[1]);
+   return;
+ }
+
+ if(e.touches.length===1){
+   const t=e.touches[0];
+   touchStartPoint={x:t.clientX,y:t.clientY};
+
+   if(tool==="pan" || zoom>1){
+     e.preventDefault();
+     closePopup();
+     touchMode="pan";
+     dragStartX=t.clientX;
+     dragStartY=t.clientY;
+     panStartX=panX;
+     panStartY=panY;
+     document.getElementById("mapbox").classList.add("dragging");
+   }else{
+     touchMode="tap";
+   }
+ }
+}
+
+function moveTouch(e){
+ if(touchMode==="pinch" && e.touches.length===2){
+   e.preventDefault();
+   const center=getTouchCenter(e.touches[0],e.touches[1]);
+   const dist=getTouchDistance(e.touches[0],e.touches[1]);
+   const factor=dist/touchStartDistance;
+   zoomAtScreenPoint(touchStartZoom*factor,center.x,center.y);
+   return;
+ }
+
+ if(touchMode==="pan" && e.touches.length===1){
+   e.preventDefault();
+   const t=e.touches[0];
+   panX=panStartX+(t.clientX-dragStartX);
+   panY=panStartY+(t.clientY-dragStartY);
+   updateTransform();
+ }
+}
+
+function endTouch(e){
+ if(touchMode==="tap" && e.changedTouches.length===1){
+   const t=e.changedTouches[0];
+   const dx=Math.abs(t.clientX-touchStartPoint.x);
+   const dy=Math.abs(t.clientY-touchStartPoint.y);
+   if(dx+dy<12 && tool==="add"){
+     const pos=screenToMapPercent(t.clientX,t.clientY);
+     if(pos.x>=0&&pos.x<=100&&pos.y>=0&&pos.y<=100){
+       const createdAt=new Date().toISOString();
+       const username=document.getElementById("username").value.trim()||"Unknown";
+       saveUsername();
+       savePoint({animal:document.getElementById("animal").value,x:Number(pos.x.toFixed(3)),y:Number(pos.y.toFixed(3)),time:autoTimeFromTimestamp(createdAt),weather:document.getElementById("weather").value,note:document.getElementById("note").value||"",username});
+       document.getElementById("note").value="";
+     }
+   }
+ }
+
+ touchMode=null;
+ isDragging=false;
+ document.getElementById("mapbox").classList.remove("dragging");
 }
 
 function startPointer(e){
@@ -724,7 +862,7 @@ function render(){
 function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));}
 function addAnimal(){const val=document.getElementById("newAnimal").value.trim();if(!val)return;["animal","filterAnimal"].forEach(id=>{const sel=document.getElementById(id);if(![...sel.options].some(o=>o.value===val||o.text===val)){const opt=document.createElement("option");opt.textContent=val;opt.value=val;sel.appendChild(opt);}});document.getElementById("animal").value=val;document.getElementById("newAnimal").value="";}
 function exportCSV(){const header=["tier","x_prozent","y_prozent","tageszeit","wetter","notiz","beobachter","erfasst_am"],rows=points.map(p=>[p.animal,p.x,p.y,p.time,p.weather,p.note,p.username,p.created_at]),csv=[header,...rows].map(row=>row.map(cell=>`"${String(cell??"").replaceAll('"','""')}"`).join(";")).join("\n");const blob=new Blob([csv],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="gta-tier-sichtungen-online-backup.csv";a.click();URL.revokeObjectURL(url);}
-window.addEventListener("resize",updateMarkerPositions);
+window.addEventListener("resize",updateTransform);
 loadTheme();loadUsername();updateCurrentTimePreview();setInterval(updateCurrentTimePreview,60000);setTool("add");updateTransform();loadPoints();
 </script>
 </body></html>
